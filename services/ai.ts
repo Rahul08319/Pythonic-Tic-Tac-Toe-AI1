@@ -1,6 +1,6 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { Player, Difficulty } from "../types";
+import { Player, Difficulty, AIPersonality } from "../types";
 import { getRandomMove, getHeuristicMove, getMinimaxMove } from "./ai_logic";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -51,7 +51,7 @@ export const getBestMove = async (board: Player[], difficulty: Difficulty): Prom
         Tell me ONLY the index of your next best move. No explanation, just the number.`;
         
         const response = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
+          model: 'gemini-3.5-flash',
           contents: prompt,
         });
         
@@ -69,10 +69,15 @@ export const getBestMove = async (board: Player[], difficulty: Difficulty): Prom
   }
 };
 
-export const getGeminiCommentary = async (board: Player[], lastMove: number, winner: Player | 'Draw' | null, difficulty?: Difficulty): Promise<string> => {
+export const getGeminiCommentary = async (
+  board: Player[], 
+  lastMove: number, 
+  winner: Player | 'Draw' | null, 
+  difficulty?: Difficulty,
+  personality: AIPersonality = 'Sarcastic Coder'
+): Promise<string> => {
   try {
     const boardDisplay = board.map((v, i) => (i % 3 === 0 ? '\n' : '') + (v || '-')).join(' ');
-    const moveCount = board.filter(x => x !== null).length;
     
     let stateCategory: keyof typeof STATE_JOKES = 'MISTAKE';
     if (winner === 'Draw') stateCategory = 'DRAW';
@@ -81,27 +86,40 @@ export const getGeminiCommentary = async (board: Player[], lastMove: number, win
 
     const baseJoke = STATE_JOKES[stateCategory][Math.floor(Math.random() * STATE_JOKES[stateCategory].length)];
 
-    const prompt = `You are a snarky Python developer playing Tic-Tac-Toe. 
-    Context:
-    Board State:${boardDisplay}
-    Last Move Index: ${lastMove} (Player's move)
-    Game Status: ${winner ? winner + ' wins' : 'Ongoing'}
-    Current Atmosphere: ${stateCategory}
-    Base Inspiration: ${baseJoke}
-    
-    Instruction: Generate a one-sentence witty remark using deep Python metaphors.
-    - If ongoing, provide a "code review" comment on their move at index ${lastMove}.
-    - Reference specific errors like: "off-by-one error", "early return", "incorrect indentation", "Global Interpreter Lock", "duck typing", or "monkey patching".
-    - Frame the response as if you're reviewing a junior's PR.
-    - Be specific to the move at ${lastMove}.`;
+    let personalityPrompt = "";
+    if (personality === 'Sarcastic Coder') {
+      personalityPrompt = `You are a snarky, passive-aggressive senior Python developer reviewing a junior dev's PR.
+      Throw in deep Python/general developer humor (like "off-by-one error", "incorrect indentation", "Global Interpreter Lock", "duck typing", "monkey patching", or "unhandled exception").
+      Offer a biting but humorous "code review" comment on their move at index ${lastMove}.`;
+    } else if (personality === 'Helpful Mentor') {
+      personalityPrompt = `You are an incredibly encouraging, warm, and helpful Python teacher and mentor.
+      Use friendly programming references (like "beautiful docstring list", "excellent recursive strategy", "clean PEP8 formatting", "smart decorator usage", or "thoughtful variable naming").
+      Review their move at index ${lastMove} positively, explaining why it was a constructive decision and offering gentle guidance for current best practices.`;
+    } else if (personality === 'Aggressive Hacker') {
+      personalityPrompt = `You are a high-stakes, intense netsec cyber-security expert / black-hat terminal hacker in a retro cyberpunk terminal.
+      Use cool cyber-security lingo (like "security perimeter compromised", "stack frame overflow", "firewall bypass", "logic bomb armed", "root partition accessed", "injecting payload", or "intercepting packet headers").
+      Review their move at index ${lastMove} like an elite hack, highlighting the defensive breach or tactical exploits of the board state.`;
+    }
+
+    const prompt = `Analyze the Tic-Tac-Toe state.
+    Board Representation:${boardDisplay}
+    Last Move Index: ${lastMove} (placed by Player ${board[lastMove] || '?'})
+    Game State: ${winner ? (winner === 'Draw' ? 'Stalemate reached' : winner + ' wins') : 'Ongoing game'}
+    Game Atmosphere: ${stateCategory}
+    Theme Hint: ${baseJoke}
+
+    Personality Guidance:
+    ${personalityPrompt}
+
+    Instruction: Generate a single witty, fully in-character, highly engaging, and relevant one-sentence comment on the move at index ${lastMove}. Do not include markdown formatting or quotes. Keep it to exactly one sentence.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3.5-flash',
       contents: prompt,
     });
     
     return response.text.trim();
   } catch (err) {
-    return "RuntimeError: Brain not found. Please pip install intelligence.";
+    return "RuntimeError: Brain database connection lost. Playback fallback initialized.";
   }
 };

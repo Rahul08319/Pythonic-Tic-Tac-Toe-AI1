@@ -8,13 +8,96 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            /* Default: Terminal theme */
+            --bg-main: #0f172a;
+            --bg-card: #1e293b;
+            --bg-panel: rgba(15, 23, 42, 0.4);
+            --bg-input: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --text-dim: #64748b;
+            --border-main: #334155;
+            --border-light: #1e293b;
+            --accent-primary: #10b981;
+            --accent-primary-hover: #059669;
+            --accent-secondary: #06b6d4;
+            --accent-tertiary: #8b5cf6;
+            --accent-win: #22d3ee;
+        }
+
+        .theme-terminal {
+            --bg-main: #0f172a;
+            --bg-card: #1e293b;
+            --bg-panel: rgba(15, 23, 42, 0.4);
+            --bg-input: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --text-dim: #64748b;
+            --border-main: #334155;
+            --border-light: #1e293b;
+            --accent-primary: #10b981;
+            --accent-primary-hover: #059669;
+            --accent-secondary: #06b6d4;
+            --accent-tertiary: #8b5cf6;
+            --accent-win: #22d3ee;
+        }
+
+        .theme-solarized {
+            --bg-main: #002b36;
+            --bg-card: #073642;
+            --bg-panel: rgba(7, 54, 66, 0.4);
+            --bg-input: #073642;
+            --text-main: #93a1a1;
+            --text-muted: #268bd2;
+            --text-dim: #586e75;
+            --border-main: #586e75;
+            --border-light: #073642;
+            --accent-primary: #859900;
+            --accent-primary-hover: #718200;
+            --accent-secondary: #2aa198;
+            --accent-tertiary: #cb4b16;
+            --accent-win: #b58900;
+        }
+
+        .theme-high-contrast {
+            --bg-main: #000000;
+            --bg-card: #000000;
+            --bg-panel: #111111;
+            --bg-input: #222222;
+            --text-main: #ffffff;
+            --text-muted: #f3f4f6;
+            --text-dim: #a1a1aa;
+            --border-main: #ffffff;
+            --border-light: #ffffff;
+            --accent-primary: #ffff00;
+            --accent-primary-hover: #dddd00;
+            --accent-secondary: #00ffff;
+            --accent-tertiary: #ff00ff;
+            --accent-win: #00ff00;
+        }
+
         body {
             font-family: 'Fira Code', monospace;
-            background-color: #0f172a;
-            color: #f8fafc;
+            background-color: var(--bg-main);
+            color: var(--text-main);
             margin: 0;
             overflow-x: hidden;
+            transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
         }
+
+        .bg-theme-main { background-color: var(--bg-main) !important; }
+        .bg-theme-card { background-color: var(--bg-card) !important; }
+        .bg-theme-panel { background-color: var(--bg-panel) !important; }
+        .bg-theme-input { background-color: var(--bg-input) !important; }
+        .text-theme-main { color: var(--text-main) !important; }
+        .text-theme-muted { color: var(--text-muted) !important; }
+        .text-theme-dim { color: var(--text-dim) !important; }
+        .border-theme-main { border-color: var(--border-main) !important; }
+        .border-theme-light { border-color: var(--border-light) !important; }
+        .text-theme-primary { color: var(--accent-primary) !important; }
+        .text-theme-secondary { color: var(--accent-secondary) !important; }
+        .text-theme-tertiary { color: var(--accent-tertiary) !important; }
 
         @keyframes win-glow {
           0% { box-shadow: 0 0 5px rgba(34, 211, 238, 0.5); border-color: rgba(34, 211, 238, 0.5); }
@@ -47,6 +130,17 @@
           20% { opacity: 1; transform: translateY(0); }
           80% { opacity: 1; transform: translateY(0); }
           100% { opacity: 0; transform: translateY(-10px); }
+        }
+
+        @keyframes last-move-glow {
+          0% { box-shadow: inset 0 0 4px rgba(56, 189, 248, 0.2); border-color: rgba(56, 189, 248, 0.4); }
+          50% { box-shadow: inset 0 0 12px rgba(56, 189, 248, 0.6); border-color: rgba(56, 189, 248, 0.8); }
+          100% { box-shadow: inset 0 0 4px rgba(56, 189, 248, 0.2); border-color: rgba(56, 189, 248, 0.4); }
+        }
+
+        .last-move-highlight {
+          animation: last-move-glow 2s infinite ease-in-out;
+          background-color: rgba(56, 189, 248, 0.05);
         }
 
         .winning-square {

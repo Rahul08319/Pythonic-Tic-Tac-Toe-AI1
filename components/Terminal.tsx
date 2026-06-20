@@ -5,9 +5,10 @@ import { LogEntry } from '../types';
 interface TerminalProps {
   logs: LogEntry[];
   onClear: () => void;
+  onDownload?: () => void;
 }
 
-const Terminal: React.FC<TerminalProps> = ({ logs, onClear }) => {
+const Terminal: React.FC<TerminalProps> = ({ logs, onClear, onDownload }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -27,12 +28,23 @@ const Terminal: React.FC<TerminalProps> = ({ logs, onClear }) => {
           </div>
           <span className="text-xs text-slate-400 font-medium ml-2 uppercase tracking-widest">Python Console</span>
         </div>
-        <button 
-          onClick={onClear}
-          className="text-[10px] text-slate-500 hover:text-slate-300 font-bold uppercase transition-colors"
-        >
-          Clear
-        </button>
+        <div className="flex items-center gap-3">
+          {onDownload && (
+            <button 
+              onClick={onDownload}
+              disabled={logs.length === 0}
+              className="text-[10px] text-slate-500 hover:text-slate-300 disabled:text-slate-700 disabled:cursor-not-allowed font-bold uppercase transition-colors flex items-center gap-0.5"
+            >
+              <span>↓</span> EXPORT
+            </button>
+          )}
+          <button 
+            onClick={onClear}
+            className="text-[10px] text-slate-500 hover:text-slate-300 font-bold uppercase transition-colors"
+          >
+            Clear
+          </button>
+        </div>
       </div>
       <div 
         ref={scrollRef}

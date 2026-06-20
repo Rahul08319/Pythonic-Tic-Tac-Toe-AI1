@@ -7,11 +7,12 @@ interface SquareProps {
   onClick: () => void;
   isWinningSquare: boolean;
   isLastAiMove: boolean;
+  isLastMove: boolean;
   disabled: boolean;
   animationsEnabled: boolean;
 }
 
-const Square: React.FC<SquareProps> = ({ value, onClick, isWinningSquare, isLastAiMove, disabled, animationsEnabled }) => {
+const Square: React.FC<SquareProps> = ({ value, onClick, isWinningSquare, isLastAiMove, isLastMove, disabled, animationsEnabled }) => {
   return (
     <button
       onClick={onClick}
@@ -25,6 +26,8 @@ const Square: React.FC<SquareProps> = ({ value, onClick, isWinningSquare, isLast
         ${value === null ? 'hover:bg-slate-800 active:bg-slate-700 active:scale-95' : 'cursor-default'}
         ${isWinningSquare && animationsEnabled ? 'winning-square bg-indigo-900/40 text-cyan-400 border-cyan-400 border-2 scale-105 z-10' : ''}
         ${isWinningSquare && !animationsEnabled ? 'bg-indigo-900/40 text-cyan-400 border-cyan-400 border-2 scale-105 z-10' : ''}
+        ${isLastMove && animationsEnabled ? 'last-move-highlight border-sky-400 z-10' : ''}
+        ${isLastMove && !animationsEnabled ? 'border-sky-400 bg-sky-950/20 z-10' : ''}
         ${isLastAiMove && animationsEnabled ? 'ai-pulse' : ''}
         ${value === 'X' ? 'text-emerald-400' : 'text-purple-400'}
         ${disabled && !value ? 'opacity-50' : ''}

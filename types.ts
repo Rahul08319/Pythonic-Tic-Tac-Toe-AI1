@@ -13,10 +13,13 @@ export enum GameMode {
   PVA = 'PVA'
 }
 
+export type AIPersonality = 'Sarcastic Coder' | 'Helpful Mentor' | 'Aggressive Hacker';
+
 export interface Settings {
   volume: number;
   animationsEnabled: boolean;
   soundsEnabled: boolean;
+  aiPersonality: AIPersonality;
 }
 
 export interface StatRecord {
@@ -28,6 +31,8 @@ export interface StatRecord {
 export interface GameStats {
   PVA: Record<Difficulty, StatRecord>;
   PVP: StatRecord;
+  pvaStreak?: number;
+  maxPvaStreak?: number;
 }
 
 export interface GameState {
