@@ -20,6 +20,8 @@ export interface Settings {
   animationsEnabled: boolean;
   soundsEnabled: boolean;
   aiPersonality: AIPersonality;
+  activeTheme?: string;
+  adaptiveAIEnabled?: boolean;
 }
 
 export interface StatRecord {
@@ -33,6 +35,15 @@ export interface GameStats {
   PVP: StatRecord;
   pvaStreak?: number;
   maxPvaStreak?: number;
+  achievements?: string[];
+}
+
+export interface Achievement {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  color: string;
 }
 
 export interface GameState {

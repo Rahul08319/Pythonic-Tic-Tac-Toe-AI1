@@ -1,4 +1,6 @@
 
+import { Achievement } from "./types";
+
 export const WINNING_LINES = [
   [0, 1, 2],
   [3, 4, 5],
@@ -11,6 +13,44 @@ export const WINNING_LINES = [
 ];
 
 export const INITIAL_BOARD = Array(9).fill(null);
+
+export const ACHIEVEMENTS: Achievement[] = [
+  {
+    id: "first_win",
+    title: "First Blood",
+    description: "Register your first human victory.",
+    icon: "⚔️",
+    color: "text-emerald-400 border-emerald-500 bg-emerald-950/20",
+  },
+  {
+    id: "ten_games",
+    title: "Persistence Pays",
+    description: "Complete 10 total matches.",
+    icon: "💾",
+    color: "text-blue-400 border-blue-500 bg-blue-950/20",
+  },
+  {
+    id: "perfect_defeat",
+    title: "Perfect AI Defeat",
+    description: "Defeat the AI in the minimum of 3 moves.",
+    icon: "⚡",
+    color: "text-amber-400 border-amber-500 bg-amber-950/20",
+  },
+  {
+    id: "hacker_defeat",
+    title: "Hacker Defeated",
+    description: "Defeat the AI on IMPOSSIBLE or GEMINI level.",
+    icon: "💻",
+    color: "text-purple-400 border-purple-500 bg-purple-950/20",
+  },
+  {
+    id: "streak_master",
+    title: "On Fire",
+    description: "Achieve a win streak of 3 against the AI.",
+    icon: "🔥",
+    color: "text-rose-400 border-rose-500 bg-rose-950/20",
+  },
+];
 
 export const DIFFICULTY_LABELS = {
   EASY: 'Script Kiddie',

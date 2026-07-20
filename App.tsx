@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Difficulty, GameMode, AIPersonality } from "./types";
 import {
   DIFFICULTY_LABELS,
   DIFFICULTY_DESCRIPTIONS,
   MODE_DESCRIPTIONS,
   SYMBOL_DESCRIPTIONS,
+  ACHIEVEMENTS,
 } from "./constants";
 import Square from "./components/Square";
 import Terminal from "./components/Terminal";
@@ -19,6 +20,31 @@ import {
   Tooltip,
   Cell,
 } from "recharts";
+import { motion } from "motion/react";
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.05,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, scale: 0.8, y: 15 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    y: 0,
+    transition: {
+      type: "spring",
+      stiffness: 220,
+      damping: 18,
+    },
+  },
+};
 
 const App: React.FC = () => {
   const {
@@ -38,6 +64,7 @@ const App: React.FC = () => {
     settings,
     stats,
     timeLeft,
+    gameId,
     addLog,
     makeMove,
     resetGame,
@@ -49,6 +76,21 @@ const App: React.FC = () => {
     setSettings,
     resetSettings,
   } = useTicTacToe();
+
+  const [sessionTime, setSessionTime] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSessionTime((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const formatSessionTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, "0")}m ${secs.toString().padStart(2, "0")}s`;
+  };
 
   const currentStats =
     mode === GameMode.PVA ? stats.PVA[difficulty] : stats.PVP;
@@ -209,22 +251,30 @@ const App: React.FC = () => {
           </div>
 
           <div className="relative group">
-            <div
+            <motion.div
+              key={`grid-${gameId}`}
+              variants={containerVariants}
+              initial={settings.animationsEnabled ? "hidden" : "visible"}
+              animate="visible"
               className={`grid grid-cols-3 gap-1 bg-slate-700 p-1 rounded-lg overflow-hidden shadow-2xl border transition-all duration-500 ${winner === "Draw" && settings.animationsEnabled ? "stalemate-active" : "border-slate-600"}`}
             >
               {board.map((square, i) => (
-                <Square
+                <motion.div
                   key={i}
-                  value={square}
-                  onClick={() => makeMove(i)}
-                  isWinningSquare={winningLine?.includes(i) ?? false}
-                  isLastAiMove={lastAiMoveIndex === i}
-                  isLastMove={lastMoveIndex === i}
-                  disabled={isProcessing || !!winner}
-                  animationsEnabled={settings.animationsEnabled}
-                />
+                  variants={settings.animationsEnabled ? itemVariants : {}}
+                >
+                  <Square
+                    value={square}
+                    onClick={() => makeMove(i)}
+                    isWinningSquare={winningLine?.includes(i) ?? false}
+                    isLastAiMove={lastAiMoveIndex === i}
+                    isLastMove={lastMoveIndex === i}
+                    disabled={isProcessing || !!winner}
+                    animationsEnabled={settings.animationsEnabled}
+                  />
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
 
             {winner === "Draw" && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
@@ -353,6 +403,51 @@ const App: React.FC = () => {
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* System Achievements */}
+          <div className="w-full bg-slate-900/30 rounded-xl border border-slate-800 p-4 space-y-3 bg-theme-panel border-theme-main shadow-lg">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-2 border-theme-light">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest text-theme-dim flex items-center gap-1.5">
+                <span>🏆</span> Decoded Achievements
+              </span>
+              <span className="text-[10px] text-cyan-400 font-mono text-theme-secondary font-bold bg-slate-900 border border-slate-800 px-2 py-0.5 rounded-full">
+                {stats.achievements ? stats.achievements.length : 0} / {ACHIEVEMENTS.length}
+              </span>
+            </div>
+            
+            <div className="grid grid-cols-1 gap-2">
+              {ACHIEVEMENTS.map((ach) => {
+                const isUnlocked = stats.achievements?.includes(ach.id) ?? false;
+                return (
+                  <div
+                    key={ach.id}
+                    className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all duration-300 font-mono ${
+                      isUnlocked
+                        ? `${ach.color} border-slate-700/50 shadow-md`
+                        : "opacity-35 bg-slate-950/20 border-slate-900 text-slate-600 grayscale"
+                    }`}
+                  >
+                    <div className="text-lg shrink-0 p-1.5 bg-slate-900/80 rounded-md border border-slate-800/60">
+                      {ach.icon}
+                    </div>
+                    <div className="flex flex-col text-left">
+                      <span className={`text-[10px] font-bold ${isUnlocked ? "text-slate-200" : "text-slate-500"}`}>
+                        {ach.title}
+                      </span>
+                      <span className="text-[9px] text-slate-400/70 leading-tight">
+                        {ach.description}
+                      </span>
+                    </div>
+                    {isUnlocked && (
+                      <span className="ml-auto text-[8px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider font-bold animate-pulse">
+                        Unlocked
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -526,6 +621,32 @@ const App: React.FC = () => {
                   ></div>
                 </button>
               </div>
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col text-left">
+                  <span className="text-[10px] font-mono text-slate-400 uppercase">
+                    Adaptive AI
+                  </span>
+                  <span className="text-[8px] font-mono text-slate-600 uppercase">
+                    Upgrades AI every 3 human wins
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    const nextVal = !settings.adaptiveAIEnabled;
+                    setSettings({
+                      ...settings,
+                      adaptiveAIEnabled: nextVal,
+                    });
+                    sounds.playClick();
+                    addLog(`Adaptive AI Difficulty toggled to ${nextVal ? "ON" : "OFF"}.`, "info");
+                  }}
+                  className={`w-10 h-5 rounded-full transition-all relative ${settings.adaptiveAIEnabled ? "bg-amber-600 animate-pulse" : "bg-slate-700"}`}
+                >
+                  <div
+                    className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${settings.adaptiveAIEnabled ? "left-6" : "left-1"}`}
+                  ></div>
+                </button>
+              </div>
 
               <div className="border-t border-slate-800/80 pt-3 border-theme-light">
                 <span className="text-[10px] font-mono text-slate-400 uppercase block mb-2">
@@ -601,6 +722,8 @@ const App: React.FC = () => {
               >
                 {settings.animationsEnabled ? "Active" : "Disabled"}
               </p>
+              <p>SESSION_TIME:</p>
+              <p className="text-amber-400 font-bold">{formatSessionTime(sessionTime)}</p>
             </div>
             <div className="border-t border-slate-800/85 mt-3 pt-2 font-mono text-[10px]">
               <p className="uppercase tracking-widest text-slate-600 font-bold mb-1">

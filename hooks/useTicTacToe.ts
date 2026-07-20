@@ -1,14 +1,14 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Player, Difficulty, GameMode, LogEntry, Settings, GameStats } from '../types';
-import { WINNING_LINES, INITIAL_BOARD } from '../constants';
+import { WINNING_LINES, INITIAL_BOARD, ACHIEVEMENTS } from '../constants';
 import { getBestMove, getGeminiCommentary } from '../services/ai';
 import { sounds } from '../services/sounds';
 
 const STORAGE_KEY_SETTINGS = 'py_ttt_settings';
 const STORAGE_KEY_STATS = 'py_ttt_stats';
 
-const DEFAULT_SETTINGS: Settings = { volume: 0.5, animationsEnabled: true, soundsEnabled: true, aiPersonality: 'Sarcastic Coder', activeTheme: 'Terminal' };
+const DEFAULT_SETTINGS: Settings = { volume: 0.5, animationsEnabled: true, soundsEnabled: true, aiPersonality: 'Sarcastic Coder', activeTheme: 'Terminal', adaptiveAIEnabled: false };
 
 const DEFAULT_STATS: GameStats = {
   PVA: {
@@ -19,7 +19,8 @@ const DEFAULT_STATS: GameStats = {
   },
   PVP: { wins: 0, losses: 0, draws: 0 },
   pvaStreak: 0,
-  maxPvaStreak: 0
+  maxPvaStreak: 0,
+  achievements: []
 };
 
 export const useTicTacToe = () => {
@@ -37,7 +38,8 @@ export const useTicTacToe = () => {
         ...DEFAULT_STATS,
         ...parsed,
         pvaStreak: parsed.pvaStreak ?? 0,
-        maxPvaStreak: parsed.maxPvaStreak ?? 0
+        maxPvaStreak: parsed.maxPvaStreak ?? 0,
+        achievements: parsed.achievements ?? []
       };
     }
     return DEFAULT_STATS;
@@ -56,6 +58,7 @@ export const useTicTacToe = () => {
   const [lastAiMoveIndex, setLastAiMoveIndex] = useState<number | null>(null);
   const [lastMoveIndex, setLastMoveIndex] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState(15);
+  const [gameId, setGameId] = useState(0);
 
   const currentBoard = useMemo(() => history[stepNumber], [history, stepNumber]);
 
@@ -103,6 +106,19 @@ export const useTicTacToe = () => {
           if (nextStreak > nextMaxStreak) {
             nextMaxStreak = nextStreak;
           }
+
+          if (settings.adaptiveAIEnabled && nextStreak > 0 && nextStreak % 3 === 0) {
+            const DIFFICULTIES_ORDER = [Difficulty.EASY, Difficulty.MEDIUM, Difficulty.IMPOSSIBLE, Difficulty.GEMINI];
+            const currentIndex = DIFFICULTIES_ORDER.indexOf(difficulty);
+            if (currentIndex < DIFFICULTIES_ORDER.length - 1) {
+              const nextDiff = DIFFICULTIES_ORDER[currentIndex + 1];
+              setTimeout(() => {
+                setDifficulty(nextDiff);
+                addLog(`📈 Adaptive AI: AI skill level upgraded to ${nextDiff} due to your ${nextStreak}-win streak!`, 'success');
+                sounds.playDifficultySelect();
+              }, 100);
+            }
+          }
         } else {
           record.losses++;
           nextStreak = 0; // loss resets the consecutive win streak
@@ -115,9 +131,50 @@ export const useTicTacToe = () => {
           [difficulty]: record
         };
       }
+
+      // Check achievements
+      const currentAchievements = prev.achievements ? [...prev.achievements] : [];
+      const totalPvaGames = Object.values(newStats.PVA).reduce((acc: number, curr: any) => acc + curr.wins + curr.losses + curr.draws, 0);
+      const totalPvpGames = newStats.PVP.wins + newStats.PVP.losses + newStats.PVP.draws;
+      const totalGames = totalPvaGames + totalPvpGames;
+      const totalWins = Object.values(newStats.PVA).reduce((acc: number, curr: any) => acc + curr.wins, 0) + newStats.PVP.wins;
+
+      const newUnlocks: string[] = [];
+
+      if (totalWins > 0 && !currentAchievements.includes('first_win')) {
+        newUnlocks.push('first_win');
+      }
+      if (totalGames >= 10 && !currentAchievements.includes('ten_games')) {
+        newUnlocks.push('ten_games');
+      }
+      if (mode === GameMode.PVA && gameWinner === userSymbol && stepNumber <= 4 && !currentAchievements.includes('perfect_defeat')) {
+        newUnlocks.push('perfect_defeat');
+      }
+      if (mode === GameMode.PVA && gameWinner === userSymbol && (difficulty === Difficulty.IMPOSSIBLE || difficulty === Difficulty.GEMINI) && !currentAchievements.includes('hacker_defeat')) {
+        newUnlocks.push('hacker_defeat');
+      }
+      if (newStats.maxPvaStreak >= 3 && !currentAchievements.includes('streak_master')) {
+        newUnlocks.push('streak_master');
+      }
+
+      if (newUnlocks.length > 0) {
+        newStats.achievements = [...currentAchievements, ...newUnlocks];
+        setTimeout(() => {
+          newUnlocks.forEach(id => {
+            const ach = ACHIEVEMENTS.find(a => a.id === id);
+            if (ach) {
+              addLog(`🏆 ACHIEVEMENT UNLOCKED: "${ach.title}" - ${ach.description}`, 'success');
+              sounds.playWin();
+            }
+          });
+        }, 150);
+      } else {
+        newStats.achievements = currentAchievements;
+      }
+
       return newStats;
     });
-  }, [mode, difficulty, userSymbol]);
+  }, [mode, difficulty, userSymbol, settings.adaptiveAIEnabled, stepNumber, addLog]);
 
   const calculateWinner = (board: Player[]) => {
     for (let i = 0; i < WINNING_LINES.length; i++) {
@@ -179,6 +236,7 @@ export const useTicTacToe = () => {
     setIsProcessing(false);
     setLastAiMoveIndex(null);
     setLastMoveIndex(null);
+    setGameId(prev => prev + 1);
     addLog('System Rebooted. Board Initialized.', 'info');
   }, [addLog]);
 
@@ -295,6 +353,7 @@ export const useTicTacToe = () => {
     settings,
     stats,
     timeLeft,
+    gameId,
     addLog,
     makeMove,
     resetGame,
