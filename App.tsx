@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Difficulty, GameMode, AIPersonality } from "./types";
+import { Difficulty, GameMode, AIPersonality, Player } from "./types";
 import {
   DIFFICULTY_LABELS,
   DIFFICULTY_DESCRIPTIONS,
@@ -19,8 +19,12 @@ import {
   YAxis,
   Tooltip,
   Cell,
+  LineChart,
+  Line,
 } from "recharts";
 import { motion } from "motion/react";
+import { Volume2, VolumeX } from "lucide-react";
+import confetti from "canvas-confetti";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -65,6 +69,7 @@ const App: React.FC = () => {
     stats,
     timeLeft,
     gameId,
+    moveDurations,
     addLog,
     makeMove,
     resetGame,
@@ -116,6 +121,39 @@ const App: React.FC = () => {
     [currentStats],
   );
 
+  const aiHistoryData = useMemo(() => {
+    const rawHistory = stats.aiSkillHistory || [
+      { timestamp: "00:00:00", level: difficulty, reason: "Initial" }
+    ];
+    const difficultyMap: Record<string, number> = {
+      EASY: 1,
+      MEDIUM: 2,
+      IMPOSSIBLE: 3,
+      GEMINI: 4
+    };
+    return rawHistory.map((item, index) => ({
+      index: index + 1,
+      time: item.timestamp,
+      level: item.level,
+      score: difficultyMap[item.level] || 2,
+      reason: item.reason
+    }));
+  }, [stats.aiSkillHistory, difficulty]);
+
+  useEffect(() => {
+    if (winner && winner !== "Draw") {
+      const userWon = mode === GameMode.PVP || winner === userSymbol;
+      if (userWon) {
+        confetti({
+          particleCount: 150,
+          spread: 80,
+          origin: { y: 0.6 },
+          colors: ["#10b981", "#06b6d4", "#6366f1", "#a855f7"]
+        });
+      }
+    }
+  }, [winner, mode, userSymbol]);
+
   const downloadLogs = () => {
     if (logs.length === 0) return;
     const dataStr =
@@ -131,6 +169,61 @@ const App: React.FC = () => {
     downloadAnchor.click();
     downloadAnchor.remove();
     addLog("Gameplay telemetry logs downloaded successfully.", "success");
+  };
+
+  const exportReplay = () => {
+    const replayMoves = [];
+    for (let i = 1; i <= stepNumber; i++) {
+      const prev = history[i - 1];
+      const curr = history[i];
+      let cellIndex = -1;
+      let player: Player = null;
+      for (let j = 0; j < 9; j++) {
+        if (prev[j] !== curr[j]) {
+          cellIndex = j;
+          player = curr[j];
+          break;
+        }
+      }
+      if (cellIndex !== -1) {
+        replayMoves.push({
+          step: i,
+          cellIndex,
+          row: Math.floor(cellIndex / 3) + 1,
+          col: (cellIndex % 3) + 1,
+          player,
+          durationSeconds: moveDurations[i - 1] ?? 0,
+          boardAfterMove: curr
+        });
+      }
+    }
+
+    const exportData = {
+      gameId,
+      exportedAt: new Date().toISOString(),
+      sessionDuration: formatSessionTime(sessionTime),
+      sessionDurationSeconds: sessionTime,
+      activeGameMode: mode,
+      difficulty: difficulty,
+      aiPersonality: settings.aiPersonality,
+      totalMoves: replayMoves.length,
+      moves: replayMoves,
+      finalWinner: winner || "Ongoing",
+      statsSummary: stats
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `py_ttt_replay_game_${gameId}_${Date.now()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    sounds.playClick();
+    addLog(`📤 Replay exported successfully: py_ttt_replay_game_${gameId}.json`, "success");
   };
 
   useEffect(() => {
@@ -165,6 +258,45 @@ const App: React.FC = () => {
           );
           return { ...prev, soundsEnabled: nextSounds };
         });
+      } else if (key === "A") {
+        const PERSONALITIES: AIPersonality[] = [
+          "Sarcastic Coder",
+          "Helpful Mentor",
+          "Aggressive Hacker",
+        ];
+        setSettings?.((prev) => {
+          const idx = PERSONALITIES.indexOf(prev.aiPersonality);
+          const prevIdx = (idx - 1 + PERSONALITIES.length) % PERSONALITIES.length;
+          const nextPers = PERSONALITIES[prevIdx];
+          addLog(
+            `Captured Shortcut: AI Personality cycled backward to ${nextPers}.`,
+            "info",
+          );
+          return { ...prev, aiPersonality: nextPers };
+        });
+      } else if (key === "D") {
+        const PERSONALITIES: AIPersonality[] = [
+          "Sarcastic Coder",
+          "Helpful Mentor",
+          "Aggressive Hacker",
+        ];
+        setSettings?.((prev) => {
+          const idx = PERSONALITIES.indexOf(prev.aiPersonality);
+          const nextIdx = (idx + 1) % PERSONALITIES.length;
+          const nextPers = PERSONALITIES[nextIdx];
+          addLog(
+            `Captured Shortcut: AI Personality cycled forward to ${nextPers}.`,
+            "info",
+          );
+          return { ...prev, aiPersonality: nextPers };
+        });
+      } else if (key === "M") {
+        const nextMode = mode === GameMode.PVA ? GameMode.PVP : GameMode.PVA;
+        changeMode(nextMode);
+        addLog(
+          `Captured Shortcut: Game Mode switched to ${nextMode === GameMode.PVA ? "Human vs AI (PVA)" : "PvP (Local)"}.`,
+          "info",
+        );
       }
     };
 
@@ -172,17 +304,52 @@ const App: React.FC = () => {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [board, winner, isProcessing, makeMove, resetGame, setSettings, addLog]);
+  }, [board, winner, isProcessing, mode, makeMove, resetGame, changeMode, setSettings, addLog]);
 
   return (
     <div className="min-h-screen flex flex-col items-center p-4 md:p-8 space-y-8 max-w-6xl mx-auto">
-      <header className="text-center space-y-2">
-        <h1 className="text-4xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-500 tracking-tighter">
-          PY_TIC_TAC_TOE.ai
-        </h1>
-        <p className="text-slate-400 text-sm md:text-base font-mono">
-          from brain import logic as game
-        </p>
+      <header className="w-full flex flex-col md:flex-row md:justify-between md:items-center border-b border-slate-800 pb-4 mb-2 gap-4">
+        <div className="text-center md:text-left space-y-1">
+          <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-500 tracking-tighter">
+            PY_TIC_TAC_TOE.ai
+          </h1>
+          <p className="text-slate-400 text-xs md:text-sm font-mono">
+            from brain import logic as game
+          </p>
+        </div>
+        <div className="flex items-center justify-center gap-3 font-mono">
+          <button
+            onClick={() => {
+              setSettings?.((prev) => {
+                const nextSounds = !prev.soundsEnabled;
+                addLog(
+                  `Global sounds toggled to ${nextSounds ? "ON" : "OFF"}.`,
+                  "info"
+                );
+                return { ...prev, soundsEnabled: nextSounds };
+              });
+              sounds.playClick();
+            }}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg border text-xs font-bold transition-all ${
+              settings.soundsEnabled
+                ? "bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 hover:bg-slate-850"
+                : "bg-red-950/40 border-red-900/60 text-red-400 hover:bg-red-950/60"
+            }`}
+            title="Toggle Global Audio"
+          >
+            {settings.soundsEnabled ? (
+              <>
+                <Volume2 className="w-4 h-4 text-emerald-400" />
+                <span>MUTE ALL</span>
+              </>
+            ) : (
+              <>
+                <VolumeX className="w-4 h-4 text-red-500 animate-pulse" />
+                <span>MUTED</span>
+              </>
+            )}
+          </button>
+        </div>
       </header>
 
       <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -322,6 +489,63 @@ const App: React.FC = () => {
             </div>
           </div>
 
+          {/* AI Insights sub-panel */}
+          {mode === GameMode.PVA && (
+            <div className="w-full bg-slate-900/50 rounded-xl border border-slate-800 p-4 space-y-3 bg-theme-panel border-theme-main shadow-lg">
+              <div className="flex justify-between items-center border-b border-slate-800 pb-1.5 border-theme-light">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest text-theme-dim flex items-center gap-1.5">
+                  <span className="inline-block w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                  🧠 AI INSIGHTS: {settings.aiPersonality.toUpperCase()}
+                </span>
+                <span className="text-[9px] font-mono text-indigo-400 font-bold bg-indigo-950/40 px-2 py-0.5 rounded border border-indigo-900/40">
+                  {isProcessing ? "STATUS: ACTIVE_COMPUTE" : "STATUS: IDLE_STANDBY"}
+                </span>
+              </div>
+              <div className="font-mono text-xs text-left p-3 bg-slate-950/60 rounded-lg border border-slate-800/80 min-h-[64px] flex flex-col justify-center relative overflow-hidden">
+                {isProcessing ? (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 text-indigo-400">
+                      <span className="text-xs animate-spin font-black">⚙️</span>
+                      <span className="text-[10px] tracking-widest font-bold uppercase animate-pulse">
+                        {settings.aiPersonality === "Sarcastic Coder" && "refactoring_logic_branches.sh"}
+                        {settings.aiPersonality === "Helpful Mentor" && "generating_encouraging_docstring.py"}
+                        {settings.aiPersonality === "Aggressive Hacker" && "injecting_buffer_overflow_payload.bin"}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-300 italic animate-pulse">
+                      {settings.aiPersonality === "Sarcastic Coder" && "「 Analyzing player's suboptimal branch... Garbage collector waiting to delete X 」"}
+                      {settings.aiPersonality === "Helpful Mentor" && "「 Searching for beautiful patterns on the board to guide your strategy 」"}
+                      {settings.aiPersonality === "Aggressive Hacker" && "「 Overriding core grid partition security... Bypassing defensive terminal blocks 」"}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <div className="text-[11px] text-slate-400">
+                      {settings.aiPersonality === "Sarcastic Coder" && (
+                        <>
+                          <span className="text-rose-500 font-bold">sys.warn:</span> "Human.py is executing. Let's hope they remember to format their code branches."
+                        </>
+                      )}
+                      {settings.aiPersonality === "Helpful Mentor" && (
+                        <>
+                          <span className="text-emerald-500 font-bold">sys.tip:</span> "A fantastic execution so far. Remember: slow down, think modularly, and build a beautiful tree!"
+                        </>
+                      )}
+                      {settings.aiPersonality === "Aggressive Hacker" && (
+                        <>
+                          <span className="text-indigo-400 font-bold">sys.net:</span> "Target security matrix 88% analyzed. System breach in standby. Awaiting next command."
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <div className="absolute right-1 bottom-1 text-[8px] text-slate-800 select-none font-bold">
+                  SEC_LVL: {difficulty.toUpperCase()}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Game Stats Visualization */}
           <div className="w-full bg-slate-900/30 rounded-xl border border-slate-800 p-4 space-y-3 bg-theme-panel border-theme-main">
             <div className="flex justify-between items-center border-b border-slate-800 pb-2 border-theme-light">
@@ -404,6 +628,69 @@ const App: React.FC = () => {
                 </BarChart>
               </ResponsiveContainer>
             </div>
+
+            {/* AI Skill Level Progression Chart */}
+            {mode === GameMode.PVA && (
+              <div className="border-t border-slate-800/80 pt-3.5 space-y-2 font-mono">
+                <div className="flex justify-between items-center text-[10px] text-slate-500 font-bold uppercase tracking-widest text-theme-dim">
+                  <span>📈 AI Skill progression</span>
+                  <span className="text-amber-400 font-normal">Level: {difficulty}</span>
+                </div>
+                <div className="h-28 w-full select-none">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={aiHistoryData}
+                      margin={{ top: 5, right: 10, left: -25, bottom: 5 }}
+                    >
+                      <XAxis
+                        dataKey="index"
+                        tick={{ fill: "#64748b", fontSize: 9 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tickFormatter={(val) => {
+                          if (val === 1) return "EASY";
+                          if (val === 2) return "MED";
+                          if (val === 3) return "IMP";
+                          if (val === 4) return "GEM";
+                          return "";
+                        }}
+                        domain={[1, 4]}
+                        ticks={[1, 2, 3, 4]}
+                        tick={{ fill: "#64748b", fontSize: 8 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload;
+                            return (
+                              <div className="bg-slate-950/95 border border-slate-800 p-2 rounded text-[10px] space-y-1 font-mono text-slate-300">
+                                <p className="font-bold text-amber-400">Update #{data.index}</p>
+                                <p>Time: <span className="text-slate-400">{data.time}</span></p>
+                                <p>Level: <span className="text-cyan-400 font-bold">{data.level}</span></p>
+                                <p className="text-[9px] text-slate-500 italic">{data.reason}</p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="score"
+                        stroke="#f59e0b"
+                        strokeWidth={2}
+                        dot={{ fill: "#d97706", stroke: "#f59e0b", strokeWidth: 1, r: 3 }}
+                        activeDot={{ r: 5, strokeWidth: 1 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* System Achievements */}
@@ -539,22 +826,79 @@ const App: React.FC = () => {
           </section>
 
           <section className="bg-slate-900/30 p-6 rounded-xl border border-slate-800 space-y-4 shadow-inner">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block">
-              History (Time Travel)
-            </label>
-            <div className="max-h-40 overflow-y-auto space-y-1 pr-2 font-mono text-xs scrollbar-hide">
+            <div className="flex justify-between items-center">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block">
+                History (Time Travel)
+              </label>
+              <button
+                onClick={exportReplay}
+                className="text-[10px] font-mono text-cyan-400 border border-cyan-800/40 bg-slate-950/40 hover:bg-cyan-950/20 px-2.5 py-1 rounded transition-all flex items-center gap-1.5 hover:border-cyan-500/50"
+                title="Export current session move sequence as a downloadable JSON file"
+              >
+                <span>📤</span> EXPORT_REPLAY
+              </button>
+            </div>
+            <div className="max-h-60 overflow-y-auto space-y-1.5 pr-2 font-mono text-xs scrollbar-hide">
               {history.map((_, move) => (
                 <button
                   key={move}
                   onClick={() => jumpTo(move)}
-                  className={`w-full text-left px-3 py-1.5 rounded transition-all active:scale-[0.98] flex justify-between items-center ${stepNumber === move ? "bg-slate-700 text-white border-l-2 border-cyan-400 shadow" : "text-slate-500 hover:bg-slate-800"}`}
+                  className={`w-full text-left px-3 py-2 rounded transition-all active:scale-[0.98] flex justify-between items-center border ${
+                    stepNumber === move
+                      ? "bg-slate-800 border-cyan-500/40 text-white shadow-md shadow-cyan-950/20"
+                      : "bg-slate-900/40 border-transparent text-slate-400 hover:bg-slate-850/50 hover:text-slate-300"
+                  }`}
                 >
-                  <span>{move === 0 ? "Init State" : `Move #${move}`}</span>
-                  {stepNumber === move && (
-                    <span className="text-[10px] text-cyan-400 uppercase font-bold">
-                      Current
+                  <div className="flex flex-col text-left">
+                    <span className="font-bold text-xs flex items-center gap-1.5">
+                      {move === 0 ? "00. INIT_STATE" : `${String(move).padStart(2, "0")}. MOVE_BLOCK`}
+                      {move > 0 && moveDurations[move - 1] !== undefined && (
+                        <span className="text-[8px] bg-slate-950 text-amber-400 border border-amber-900/40 px-1 py-0.5 rounded leading-none font-bold">
+                          ⏱️ {moveDurations[move - 1]}s
+                        </span>
+                      )}
                     </span>
-                  )}
+                    <span className="text-[9px] text-slate-500">
+                      {move === 0 ? "System initialized" : (() => {
+                        const prev = history[move - 1];
+                        const curr = history[move];
+                        const idx = curr.findIndex((val, index) => val !== prev[index]);
+                        return idx !== -1 ? `Modified cell index ${idx + 1}` : "No change";
+                      })()}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {stepNumber === move && (
+                      <span className="text-[8px] bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-1 py-0.5 rounded font-bold uppercase tracking-wider animate-pulse">
+                        Current
+                      </span>
+                    )}
+                    
+                    {/* Small 3x3 read-only preview */}
+                    <div className="grid grid-cols-3 gap-[1px] bg-slate-750 p-[2px] rounded w-7 h-7 shrink-0">
+                      {history[move].map((cell, idx) => {
+                        const isLastPlaced = move > 0 && (() => {
+                          const prev = history[move - 1];
+                          const curr = history[move];
+                          return curr[idx] !== prev[idx];
+                        })();
+                        return (
+                          <div
+                            key={idx}
+                            className={`w-1.5 h-1.5 rounded-[1px] flex items-center justify-center text-[5px] font-black ${
+                              cell === "X"
+                                ? isLastPlaced ? "bg-cyan-400 text-slate-950" : "bg-cyan-950 text-cyan-400"
+                                : cell === "O"
+                                  ? isLastPlaced ? "bg-indigo-400 text-slate-950" : "bg-indigo-950 text-indigo-400"
+                                  : "bg-slate-900"
+                            }`}
+                          >
+                            {cell || ""}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </button>
               ))}
             </div>

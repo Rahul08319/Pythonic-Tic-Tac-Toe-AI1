@@ -36,6 +36,7 @@ export interface GameStats {
   pvaStreak?: number;
   maxPvaStreak?: number;
   achievements?: string[];
+  aiSkillHistory?: { timestamp: string; level: string; reason: string }[];
 }
 
 export interface Achievement {

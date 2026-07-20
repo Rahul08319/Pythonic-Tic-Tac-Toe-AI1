@@ -32,6 +32,11 @@ export const useTicTacToe = () => {
 
   const [stats, setStats] = useState<GameStats>(() => {
     const saved = localStorage.getItem(STORAGE_KEY_STATS);
+    const initialHistory = [{
+      timestamp: new Date().toLocaleTimeString([], { hour12: false }),
+      level: Difficulty.MEDIUM,
+      reason: "System Boot"
+    }];
     if (saved) {
       const parsed = JSON.parse(saved);
       return {
@@ -39,10 +44,14 @@ export const useTicTacToe = () => {
         ...parsed,
         pvaStreak: parsed.pvaStreak ?? 0,
         maxPvaStreak: parsed.maxPvaStreak ?? 0,
-        achievements: parsed.achievements ?? []
+        achievements: parsed.achievements ?? [],
+        aiSkillHistory: parsed.aiSkillHistory ?? initialHistory
       };
     }
-    return DEFAULT_STATS;
+    return {
+      ...DEFAULT_STATS,
+      aiSkillHistory: initialHistory
+    };
   });
 
   const [history, setHistory] = useState<Player[][]>([INITIAL_BOARD]);
@@ -59,6 +68,9 @@ export const useTicTacToe = () => {
   const [lastMoveIndex, setLastMoveIndex] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState(15);
   const [gameId, setGameId] = useState(0);
+
+  const [moveDurations, setMoveDurations] = useState<number[]>([]);
+  const lastMoveTimeRef = useRef<number>(Date.now());
 
   const currentBoard = useMemo(() => history[stepNumber], [history, stepNumber]);
 
@@ -176,6 +188,25 @@ export const useTicTacToe = () => {
     });
   }, [mode, difficulty, userSymbol, settings.adaptiveAIEnabled, stepNumber, addLog]);
 
+  useEffect(() => {
+    setStats(prev => {
+      const history = prev.aiSkillHistory || [];
+      const lastEntry = history[history.length - 1];
+      if (lastEntry && lastEntry.level === difficulty) {
+        return prev;
+      }
+      const newEntry = {
+        timestamp: new Date().toLocaleTimeString([], { hour12: false }),
+        level: difficulty,
+        reason: history.length === 0 ? "Initial Calibration" : (settings.adaptiveAIEnabled ? "Adaptive Scaling" : "Manual Adjustment")
+      };
+      return {
+        ...prev,
+        aiSkillHistory: [...history, newEntry]
+      };
+    });
+  }, [difficulty, settings.adaptiveAIEnabled]);
+
   const calculateWinner = (board: Player[]) => {
     for (let i = 0; i < WINNING_LINES.length; i++) {
       const [a, b, c] = WINNING_LINES[i];
@@ -196,11 +227,17 @@ export const useTicTacToe = () => {
     setWinningLine(null);
     setLastAiMoveIndex(null);
     setLastMoveIndex(null);
+    setMoveDurations(prev => prev.slice(0, step));
+    lastMoveTimeRef.current = Date.now();
     addLog(`System rollback: Reverted to step ${step}.`, 'info');
   };
 
   const makeMove = async (i: number) => {
     if (currentBoard[i] || winner || isProcessing) return;
+
+    const duration = Math.max(1, Math.round((Date.now() - lastMoveTimeRef.current) / 1000));
+    setMoveDurations(prev => [...prev.slice(0, stepNumber), duration]);
+    lastMoveTimeRef.current = Date.now();
 
     sounds.playMove();
     setLastAiMoveIndex(null); // Clear AI highlight on human move
@@ -237,6 +274,8 @@ export const useTicTacToe = () => {
     setLastAiMoveIndex(null);
     setLastMoveIndex(null);
     setGameId(prev => prev + 1);
+    setMoveDurations([]);
+    lastMoveTimeRef.current = Date.now();
     addLog('System Rebooted. Board Initialized.', 'info');
   }, [addLog]);
 
@@ -274,6 +313,10 @@ export const useTicTacToe = () => {
           const nextHistory = history.slice(0, stepNumber + 1).concat([newBoard]);
           setHistory(nextHistory);
           setStepNumber(nextHistory.length - 1);
+
+          const duration = Math.max(1, Math.round((Date.now() - lastMoveTimeRef.current) / 1000));
+          setMoveDurations(prev => [...prev.slice(0, stepNumber), duration]);
+          lastMoveTimeRef.current = Date.now();
           
           const result = calculateWinner(newBoard);
           if (result) {
@@ -354,6 +397,7 @@ export const useTicTacToe = () => {
     stats,
     timeLeft,
     gameId,
+    moveDurations,
     addLog,
     makeMove,
     resetGame,
